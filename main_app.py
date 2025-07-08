@@ -2,7 +2,7 @@ import sys
 import numpy as np
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QPushButton, QLabel, QSlider, QSizePolicy, QFrame
+    QPushButton, QLabel, QSlider, QSizePolicy, QFrame, QComboBox, QSpacerItem
 )
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QColor
@@ -10,36 +10,45 @@ from PyQt5.QtGui import QColor
 import pyqtgraph.opengl as gl
 import pyqtgraph as pg
 
-# --- CHANGE 1: Import NeuralCellData instead of CellData ---
 from cell_model import NeuralCellData 
 from simulation_logic import apply_compound_effects
+# NEW: Import DrugManager
+from drug_manager import DrugManager
 
 class VitalSimApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("VitalSim: Interactive Cell Dynamics")
-        self.setGeometry(100, 100, 1200, 800)
+        self.setGeometry(100, 100, 1400, 800) # Increased width to accommodate new panel
 
         self.simulation_running = False
         self.current_time = 0.0
         self.time_step = 0.05
         self.animation_interval_ms = 50
 
-        # --- CHANGE 2: Instantiate NeuralCellData instead of CellData ---
         self.cell_data = NeuralCellData() 
+        # NEW: Initialize DrugManager
+        self.drug_manager = DrugManager()
 
         self.growth_factor_level = 0.0
         self.toxin_level = 0.0
         self.metabolic_stimulator_level = 0.0
 
+        # NEW: Drug specific variables
+        self.active_drug = "None"
+        self.drug_dosage = 0.0
+
         self.growth_slider_widget = None
         self.toxin_slider_widget = None
         self.metabolic_slider_widget = None
         self.speed_slider_widget = None
+        # NEW: Drug UI widgets
+        self.drug_selection_combo = None
+        self.drug_dosage_slider_widget = None
 
         self.setup_ui()
 
-        # --- Initialize Cell Visualization Items ---
+        # Initialize Cell Visualization Items (existing code)
         self.membrane_item = gl.GLScatterPlotItem(pos=np.empty((0,3)), color=(0,0,0,0), size=self.cell_data.membrane_point_size)
         self.nucleus_item = gl.GLScatterPlotItem(pos=np.empty((0,3)), color=(0,0,0,0), size=self.cell_data.nucleus_point_size)
         
@@ -70,12 +79,12 @@ class VitalSimApp(QMainWindow):
 
         main_layout = QHBoxLayout(central_widget)
 
-        # --- 3D Visualization Area (Left Side) ---
+        # --- 3D Visualization Area (Left Side) --- (existing code)
         self.gl_widget = gl.GLViewWidget()
         self.gl_widget.opts['distance'] = 25
         self.gl_widget.opts['elevation'] = 30
         self.gl_widget.opts['azimuth'] = 45
-        self.gl_widget.setBackgroundColor('#202020') # Dark background for good contrast
+        self.gl_widget.setBackgroundColor('#202020')
         self.gl_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         grid = gl.GLGridItem()
@@ -113,50 +122,34 @@ class VitalSimApp(QMainWindow):
         title_label.setProperty("class", "title")
         legend_content_layout.addWidget(title_label)
 
-        # --- MODIFIED: Helper function to get a readable color name ---
         def get_color_name(r, g, b):
-            # Normalizing to 0-1 range if inputs are 0-255, though your current code uses 0-1
-            # threshold = 0.7 # A stricter threshold for "dominant"
-            
-            # Check for specific colors first, especially yellow/orange
-            # Yellow: High Red and High Green, Low Blue
-            if r > 0.8 and g > 0.6 and b < 0.2: # Tuned for (1.0, 0.7, 0.0) -> Yellow/Orange
+            if r > 0.8 and g > 0.6 and b < 0.2:
                 return "Yellow" 
-            # Cyan: High Green and High Blue, Low Red
-            elif g > 0.7 and b > 0.6 and r < 0.4: # Tuned for (0.3, 0.8, 0.7) -> Cyan/Light Green
+            elif g > 0.7 and b > 0.6 and r < 0.4:
                 return "Cyan"
-            # Blue: High Blue, relatively low Red and Green
-            elif b > 0.6 and r < 0.5 and g < 0.5: # Tuned for (0.3, 0.3, 0.8) -> Blue
+            elif b > 0.6 and r < 0.5 and g < 0.5:
                 return "Blue"
-            # Gray: All components roughly equal
-            elif abs(r - g) < 0.1 and abs(g - b) < 0.1 and r > 0.5: # Tuned for (0.8, 0.8, 0.8) -> Gray
+            elif abs(r - g) < 0.1 and abs(g - b) < 0.1 and r > 0.5:
                 return "Gray"
-            # Fallback to dominant single color if not caught by specific combinations
             elif r > g and r > b:
                 return "Red"
             elif g > r and g > b:
                 return "Green"
             elif b > r and b > g:
                 return "Blue"
-            
-            return "Other" # Fallback for unknown colors
+            return "Other"
 
-        # --- MODIFIED: Helper function to create a colored dot label for the legend ---
         def create_legend_item(label_text, color_rgba):
-            r, g, b, _ = color_rgba # Extract RGB, ignore alpha for name
+            r, g, b, _ = color_rgba
             rgb_hex = f'#{int(r*255):02x}{int(g*255):02x}{int(b*255):02x}'
-            color_name = get_color_name(r, g, b) # Use the improved function
-            
-            # HTML to draw a colored square next to the text, and include color name
+            color_name = get_color_name(r, g, b)
             html_text = (f"<span style='background-color: {rgb_hex}; display: inline-block; "
                          f"width: 12px; height: 12px; border-radius: 3px; vertical-align: middle; "
                          f"margin-right: 5px;'></span>"
                          f"{label_text} (<span style='color: {rgb_hex}; font-weight: bold;'>{color_name}</span>)")
-            
             label = QLabel(html_text)
             return label
 
-        # Add legend items dynamically using the helper function and CellData properties
         legend_content_layout.addWidget(create_legend_item(self.cell_data.membrane_label, self.cell_data.membrane_color))
         legend_content_layout.addWidget(create_legend_item(self.cell_data.nucleus_label, self.cell_data.nucleus_color))
         legend_content_layout.addWidget(create_legend_item(self.cell_data.mitochondria_label, self.cell_data.mitochondria_color))
@@ -168,6 +161,7 @@ class VitalSimApp(QMainWindow):
         overlay_layout.addStretch(1)
 
         main_layout.addWidget(self.gl_widget, 3)
+
 
         # --- Control Panel (Right Side) ---
         control_panel_layout = QVBoxLayout()
@@ -184,6 +178,7 @@ class VitalSimApp(QMainWindow):
         line.setFrameShadow(QFrame.Sunken)
         control_panel_layout.addWidget(line)
 
+        # Existing sliders
         slider_layout, self.growth_slider_widget = self._create_slider("Growth Factor Intensity:", self.set_growth_factor_level)
         control_panel_layout.addLayout(slider_layout)
 
@@ -196,8 +191,54 @@ class VitalSimApp(QMainWindow):
         slider_layout, self.speed_slider_widget = self._create_slider("Animation Speed:", self.set_animation_speed, min_val=10, max_val=200, inverted=True)
         control_panel_layout.addLayout(slider_layout)
 
-        control_panel_layout.addStretch(1)
+        # NEW: Drug Control Panel Section
+        drug_section_label = QLabel("Drug Administration")
+        drug_section_label.setStyleSheet("font-size: 18px; font-weight: bold; color: #333; margin-top: 15px;")
+        control_panel_layout.addWidget(drug_section_label)
 
+        drug_line = QFrame()
+        drug_line.setFrameShape(QFrame.HLine)
+        drug_line.setFrameShadow(QFrame.Sunken)
+        control_panel_layout.addWidget(drug_line)
+
+        # Drug selection dropdown
+        drug_select_layout = QHBoxLayout()
+        drug_select_label = QLabel("Select Drug:")
+        drug_select_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #555;")
+        drug_select_layout.addWidget(drug_select_label)
+
+        self.drug_selection_combo = QComboBox()
+        self.drug_selection_combo.addItems(list(self.drug_manager.available_drugs.keys()))
+        self.drug_selection_combo.currentIndexChanged.connect(self.set_active_drug)
+        self.drug_selection_combo.setStyleSheet("""
+            QComboBox {
+                padding: 5px;
+                font-size: 14px;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                background-color: white;
+            }
+            QComboBox::drop-down {
+                border: 0px; /* No border for the arrow part */
+            }
+            QComboBox::down-arrow {
+                image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAcAAAAFCAYAAACNbyblAAAAAXNSR0IArs4c6QAAADhJREFUCB1jYGBg+M8ABWggoAYMghMGBgYQBBgAkgEwMBgYGBgQEAAUGBgYYB/Q/wEYGBhBGPcAADX8Bv3p8K/gAAAAAElFTkSuQmCC); /* Base64 encoded small down arrow */
+                width: 10px;
+                height: 10px;
+            }
+        """)
+        drug_select_layout.addWidget(self.drug_selection_combo)
+        control_panel_layout.addLayout(drug_select_layout)
+
+        # Drug dosage slider
+        drug_slider_layout, self.drug_dosage_slider_widget = self._create_slider("Drug Dosage:", self.set_drug_dosage)
+        control_panel_layout.addLayout(drug_slider_layout)
+        # Disable dosage slider if "None" is selected initially
+        self.drug_dosage_slider_widget.setEnabled(False) 
+
+        control_panel_layout.addStretch(1) # Pushes controls to the top
+
+        # Existing buttons
         self.start_stop_button = QPushButton("Start Simulation")
         self.start_stop_button.clicked.connect(self.toggle_simulation)
         self.start_stop_button.setStyleSheet("""
@@ -277,7 +318,10 @@ class VitalSimApp(QMainWindow):
         return layout, slider
 
     def _get_initial_slider_value(self, slider_name, min_val, max_val, inverted):
-        if "Growth Factor" in slider_name:
+        # NEW: Handle drug dosage initial value
+        if "Drug Dosage" in slider_name:
+            return self.drug_dosage * 100
+        elif "Growth Factor" in slider_name:
             return self.growth_factor_level * 100
         elif "Toxin" in slider_name:
             return self.toxin_level * 100
@@ -286,6 +330,23 @@ class VitalSimApp(QMainWindow):
         elif "Animation Speed" in slider_name:
             return self.animation_interval_ms
         return 0
+
+    # NEW: Callback for drug selection combo box
+    def set_active_drug(self, index):
+        drug_name = self.drug_selection_combo.currentText()
+        self.drug_manager.set_active_drug(drug_name)
+        self.active_drug = drug_name # Update local tracker
+        self.drug_dosage_slider_widget.setValue(0) # Reset dosage slider when drug changes
+        self.drug_dosage_slider_widget.setEnabled(drug_name != "None") # Enable only if a drug is selected
+        if not self.simulation_running:
+            self.update_visualization()
+
+    # NEW: Callback for drug dosage slider
+    def set_drug_dosage(self, level):
+        self.drug_dosage = level
+        self.drug_manager.set_drug_dosage(level)
+        if not self.simulation_running:
+            self.update_visualization()
 
     def set_growth_factor_level(self, level):
         self.growth_factor_level = level
@@ -328,24 +389,37 @@ class VitalSimApp(QMainWindow):
         self.growth_factor_level = 0.0
         self.toxin_level = 0.0
         self.metabolic_stimulator_level = 0.0
+        # NEW: Reset drug levels
+        self.active_drug = "None"
+        self.drug_dosage = 0.0
+        self.drug_manager.set_active_drug("None") # Tell manager to reset
+        self.drug_manager.set_drug_dosage(0.0)
 
+        # Reset UI sliders to 0
         self.growth_slider_widget.setValue(0)
         self.toxin_slider_widget.setValue(0)
         self.metabolic_slider_widget.setValue(0)
-        self.speed_slider_widget.setValue(self.animation_interval_ms)
+        self.speed_slider_widget.setValue(self.animation_interval_ms) # Speed slider should reset to its default, not necessarily 0
+        # NEW: Reset drug UI
+        self.drug_selection_combo.setCurrentText("None") # Set combo box to "None"
+        self.drug_dosage_slider_widget.setValue(0)
+        self.drug_dosage_slider_widget.setEnabled(False) # Disable until drug is selected again
 
-        self.cell_data.generate_initial_state()
+
+        self.cell_data.generate_initial_state() # This resets cell_data to its base (homeostasis) state
         self.update_visualization()
 
     def update_simulation_step(self):
         self.current_time += self.time_step
 
+        # NEW: Pass the drug_manager to the apply_compound_effects function
         self.cell_data = apply_compound_effects(
             self.cell_data,
             self.growth_factor_level,
             self.toxin_level,
             self.metabolic_stimulator_level,
-            self.time_step
+            self.time_step,
+            self.drug_manager # Pass drug manager instance
         )
         self.update_visualization()
 
@@ -361,13 +435,18 @@ class VitalSimApp(QMainWindow):
                                    size=self.cell_data.nucleus_point_size)
 
         # Update Mitochondria
+        # Note: self.cell_data.mitochondria_points is already a list of arrays from simulation_logic
         for i, item in enumerate(self.mitochondria_items):
             if i < self.cell_data.num_active_mitochondria:
-                item.setData(pos=self.cell_data.mitochondria_points[i],
-                             color=self.cell_data.mitochondria_color,
-                             size=self.cell_data.mitochondria_point_size)
+                # Ensure the list has enough entries, as num_active_mitochondria might exceed it
+                if i < len(self.cell_data.mitochondria_points) and self.cell_data.mitochondria_points[i].size > 0:
+                     item.setData(pos=self.cell_data.mitochondria_points[i],
+                                  color=self.cell_data.mitochondria_color,
+                                  size=self.cell_data.mitochondria_point_size)
+                else: # Fallback if data is missing for an active mito
+                    item.setData(pos=np.empty((0,3))) 
             else:
-                item.setData(pos=np.empty((0,3)))
+                item.setData(pos=np.empty((0,3))) # Hide inactive mitochondria
 
         # Update Cytoplasm Particles
         self.cytoplasm_particles_item.setData(pos=self.cell_data.cytoplasm_particles,
