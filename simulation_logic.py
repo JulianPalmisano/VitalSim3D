@@ -1,107 +1,116 @@
 import numpy as np
-from cell_model import CellData # Import the CellData class
+# Corrected import to use the new class name
+from cell_model import NeuralCellData 
 
-def apply_compound_effects(cell_data: CellData, growth_level: float, toxin_level: float, metabolic_level: float, time_step: float) -> CellData:
+def apply_compound_effects(cell_data: NeuralCellData, growth_level: float, toxin_level: float, metabolic_level: float, time_step: float) -> NeuralCellData:
     """
-    Applies the effects of various compounds to the cell's state and returns the updated CellData.
+    Applies the effects of various compounds to the neural cell's state and returns the updated NeuralCellData.
 
     Args:
-        cell_data (CellData): The current state of the cell's data.
+        cell_data (NeuralCellData): The current state of the neural cell's data.
         growth_level (float): Intensity of the growth factor (0.0 to 1.0).
         toxin_level (float): Intensity of the toxin (0.0 to 1.0).
         metabolic_level (float): Intensity of the metabolic stimulator (0.0 to 1.0).
         time_step (float): The time increment for this simulation step.
 
     Returns:
-        CellData: The updated CellData object.
+        NeuralCellData: The updated NeuralCellData object.
     """
 
     # --- 1. Update Cell Scale (Growth/Toxin) ---
-    # Growth increases scale, toxin decreases.
-    # We'll make the change proportional to the time_step and compound levels.
-    # A small factor (e.g., 0.01) controls the speed of scaling.
     scale_change_rate = (growth_level * 0.01) - (toxin_level * 0.01)
     cell_data.current_scale += scale_change_rate * time_step
-    # Clamp scale to reasonable biological limits (e.g., 0.5 to 1.5 times base size)
     cell_data.current_scale = max(0.5, min(cell_data.current_scale, 1.5))
 
-    # Apply scaling to all base points to get current points
     cell_data.membrane_points = cell_data.base_membrane_points * cell_data.current_scale
     cell_data.nucleus_points = cell_data.base_nucleus_points * cell_data.current_scale
 
     # --- 2. Update Membrane Irregularity (Toxin) ---
-    # Toxin increases irregularity. Max irregularity factor 0.2 (arbitrary visual effect)
     cell_data.membrane_irregularity_factor = toxin_level * 0.2
 
     if cell_data.membrane_irregularity_factor > 0:
-        # Apply noise based on original normal vectors to push points in/out
-        # This creates a "jagged" or "damaged" look for the membrane
-        # Calculate approximate normals (vector from origin to point)
-        normals = cell_data.membrane_points / np.linalg.norm(cell_data.membrane_points, axis=1, keepdims=True)
-        # Add random noise along the normal direction
+        norms = np.linalg.norm(cell_data.membrane_points, axis=1, keepdims=True)
+        norms[norms == 0] = 1 
+        normals = cell_data.membrane_points / norms
+        
         noise_magnitude = np.random.normal(0, cell_data.membrane_irregularity_factor, cell_data.membrane_points.shape[0])
-        cell_data.membrane_points += normals * noise_magnitude[:, np.newaxis] # Apply noise along normal
+        cell_data.membrane_points += normals * noise_magnitude[:, np.newaxis]
 
-    # --- 3. Update Cell Colors (Toxin for membrane, Metabolic for particles) ---
-    # Membrane color: from healthy green (low toxin) to damaged red (high toxin)
-    r = toxin_level * 0.8 + (1 - toxin_level) * 0.2 # More red with toxin
-    g = (1 - toxin_level) * 0.8 + toxin_level * 0.2 # Less green with toxin
-    b = 0.2 # Keep some blue
-    a = 0.8 # Alpha (transparency)
-    cell_data.membrane_color = (r, g, b, a)
+    # --- 3. Update Cell Colors ---
 
-    # Nucleus color: slightly affected by toxin (e.g., darker)
-    n_r = cell_data.nucleus_color[0] + toxin_level * 0.1
-    n_g = cell_data.nucleus_color[1] - toxin_level * 0.1
-    n_b = cell_data.nucleus_color[2]
-    cell_data.nucleus_color = (max(0, min(n_r, 1)), max(0, min(n_g, 1)), n_b, cell_data.nucleus_color[3])
+    # Membrane color: Healthy (light green/cyan) to Damaged (more yellow/brownish)
+    # Start: (0.3, 0.8, 0.7, 0.15)
+    r_m = 0.3 + toxin_level * 0.4  # Increase red towards yellow/brown
+    g_m = 0.8 - toxin_level * 0.5  # Decrease green
+    b_m = 0.7 - toxin_level * 0.7  # Decrease blue, making it less cyan
+    a_m = 0.15 # Keep alpha consistent
 
+    cell_data.membrane_color = (max(0, min(r_m, 1)), max(0, min(g_m, 1)), max(0, min(b_m, 1)), a_m)
 
-    # Particle color: from yellow (normal) to brighter/more active (metabolic stimulator)
-    p_r = 1.0 # Always red component
-    p_g = 1.0 - metabolic_level * 0.5 # Less green with stimulator (more orange/red)
-    p_b = 0.0 # No blue
-    p_a = 0.7 # Alpha
-    cell_data.particle_color = (p_r, p_g, p_b, p_a)
+    # Nucleus color: Healthy (blue) to slightly affected (darker blue/purple)
+    # Start: (0.3, 0.3, 0.8, 0.7)
+    n_r = 0.3 + toxin_level * 0.1 # Slight red tint with toxin
+    n_g = 0.3 - toxin_level * 0.1 # Slight green reduction
+    n_b = 0.8 # Keep blue dominant
+    n_a = 0.7 # Alpha
+
+    cell_data.nucleus_color = (max(0, min(n_r, 1)), max(0, min(n_g, 1)), max(0, min(n_b, 1)), n_a)
+
+    # Particle color: Healthy (gray) to more active/damaged (brighter, potentially redder)
+    # Start: (0.8, 0.8, 0.8, 0.4)
+    # Metabolic stimulator makes them brighter/more active. Toxin could make them duller/redder.
+    p_r = 0.8 + metabolic_level * 0.1 + toxin_level * 0.1 # Brighten and add red with toxin
+    p_g = 0.8 + metabolic_level * 0.1 - toxin_level * 0.1 # Brighten, but less green with toxin
+    p_b = 0.8 + metabolic_level * 0.1 - toxin_level * 0.1 # Brighten, but less blue with toxin
+    p_a = 0.4 # Alpha
+
+    cell_data.particle_color = (max(0, min(p_r, 1)), max(0, min(p_g, 1)), max(0, min(p_b, 1)), p_a)
 
     # --- 4. Update Mitochondria (Number/Size/Activity) ---
-    # Number of active mitochondria based on growth/toxin
-    # Max mitochondria count is fixed by the number of base_mitochondria_points_list
     max_mito_count = len(cell_data.base_mitochondria_points_list)
-    cell_data.num_active_mitochondria = int(max_mito_count * (1.0 + growth_level * 0.5 - toxin_level * 0.5))
+    cell_data.num_active_mitochondria = int(max_mito_count * (1.0 + growth_level * 0.5 - toxin_level * 0.8))
     cell_data.num_active_mitochondria = max(0, min(cell_data.num_active_mitochondria, max_mito_count))
 
-    # Scale and update positions for active mitochondria
-    cell_data.mitochondria_points = []
+    current_mitochondria_render_list = [] 
     for i in range(cell_data.num_active_mitochondria):
-        # Apply scaling and a subtle "jiggle" for activity
-        jiggle_amplitude = metabolic_level * 0.05 # Jiggle more with stimulator
-        jiggle = (np.random.rand(*cell_data.base_mitochondria_points_list[i].shape) - 0.5) * jiggle_amplitude
-        scaled_mito = cell_data.base_mitochondria_points_list[i] * cell_data.current_scale + jiggle
-        cell_data.mitochondria_points.append(scaled_mito)
+        if i < len(cell_data.base_mitochondria_points_list):
+            jiggle_amplitude = metabolic_level * 0.05
+            jiggle = (np.random.rand(*cell_data.base_mitochondria_points_list[i].shape) - 0.5) * jiggle_amplitude
+            scaled_mito = cell_data.base_mitochondria_points_list[i] * cell_data.current_scale + jiggle
+            current_mitochondria_render_list.append(scaled_mito)
+        else:
+            current_mitochondria_render_list.append(np.empty((0,3)))
 
-    # Mitochondria color can also change with metabolic stimulator
-    m_r = cell_data.mitochondria_color[0] + metabolic_level * 0.1
-    m_g = cell_data.mitochondria_color[1] - metabolic_level * 0.1
-    cell_data.mitochondria_color = (max(0, min(m_r, 1)), max(0, min(m_g, 1)), cell_data.mitochondria_color[2], cell_data.mitochondria_color[3])
+    cell_data.mitochondria_points = current_mitochondria_render_list
 
+    # Mitochondria color: Healthy (yellow/orange) to stressed/damaged (duller, more red/brown)
+    # Start: (1.0, 0.7, 0.0, 0.9)
+    m_r = 1.0 - toxin_level * 0.2 # Red slightly down with toxin
+    m_g = 0.7 + metabolic_level * 0.2 - toxin_level * 0.4 # Green up with metabolic, significantly down with toxin
+    m_b = 0.0 + toxin_level * 0.1 # Introduce a little blue/darkness with toxin
+
+    cell_data.mitochondria_color = (max(0, min(m_r, 1)), max(0, min(m_g, 1)), max(0, min(m_b, 1)), cell_data.mitochondria_color[3])
 
     # --- 5. Update Cytoplasm Particles (Movement) ---
-    # Particle speed based on metabolic stimulator
-    cell_data.particle_speed_factor = 1.0 + metabolic_level * 0.5 # Base speed + stimulator effect
-
-    # Simple random walk for particles
-    particle_movement = (np.random.rand(*cell_data.cytoplasm_particles.shape) - 0.5) * 0.2 * cell_data.particle_speed_factor
+    cell_data.particle_speed_factor = 1.0 + metabolic_level * 0.5
+    particle_movement = (np.random.rand(*cell_data.cytoplasm_particles.shape) - 0.5) * 0.2 * cell_data.particle_speed_factor * time_step
     cell_data.cytoplasm_particles += particle_movement
 
-    # Keep particles roughly within the current cell bounds (simplified spherical clamp)
-    current_cell_radius = 5.0 * cell_data.current_scale # Approximate radius
-    distances_from_center = np.linalg.norm(cell_data.cytoplasm_particles, axis=1)
-    # If a particle moves too far, reset it closer to the center or within bounds
-    # A simple clamp is sufficient for visual effect
-    cell_data.cytoplasm_particles = np.clip(cell_data.cytoplasm_particles,
-                                            -current_cell_radius, current_cell_radius)
+    soma_x_radius = 4.0 * cell_data.current_scale
+    soma_y_radius = 5.0 * cell_data.current_scale
+    soma_z_radius = 4.0 * cell_data.current_scale
+    nucleus_radius = 1.8 * cell_data.current_scale
 
-
+    for i in range(len(cell_data.cytoplasm_particles)):
+        p = cell_data.cytoplasm_particles[i]
+        
+        if (p[0]**2 / soma_x_radius**2) + (p[1]**2 / soma_y_radius**2) + (p[2]**2 / soma_z_radius**2) >= 1.0:
+            cell_data.cytoplasm_particles[i] = np.random.uniform(-soma_x_radius * 0.8, soma_x_radius * 0.8, 3) 
+            if np.linalg.norm(cell_data.cytoplasm_particles[i]) < nucleus_radius:
+                cell_data.cytoplasm_particles[i] += (np.random.rand(3) - 0.5) * 0.5 
+        
+        elif np.linalg.norm(p) < nucleus_radius:
+            direction = p / np.linalg.norm(p) if np.linalg.norm(p) > 0 else np.array([0,0,1])
+            cell_data.cytoplasm_particles[i] = direction * nucleus_radius * 1.1
+            
     return cell_data
-
