@@ -8,7 +8,7 @@ Cell Model and Components:
 * Mitochondria
 * Cytoplasm & Vesicles
 
-The current cell model is a basic neural cell like structure
+The current cell model is a basic neural cell like structure.
 
 Features & Functionalities:
 * Visualize cell changes throughout time
@@ -35,3 +35,19 @@ Possible use cases/additions one could make to this:
 * Add specific measurments with the ability to change dosage size etc.
 * Customize visualization and coloring as one would like
 * Add new cells, the ability to switch between various types of cells
+
+Languages Used:
+* Python
+
+Libraries Used:
+* sys
+* numpy
+* PyQt5.QtWidgets
+* PyQt5.QtCore
+* PyQt5.QtGui
+* pyqtgraph.opengl
+* pyqtgraph
+
+You can install them using pip^:
+```bash
+pip install numpy PyQt5 pyqtgraph
