@@ -12,14 +12,13 @@ import pyqtgraph as pg
 
 from cell_model import NeuralCellData 
 from simulation_logic import apply_compound_effects
-# NEW: Import DrugManager
 from drug_manager import DrugManager
 
 class VitalSimApp(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("VitalSim: Interactive Cell Dynamics")
-        self.setGeometry(100, 100, 1400, 800) # Increased width to accommodate new panel
+        self.setWindowTitle("VitalSim3D: Interactive Cell Dynamics")
+        self.setGeometry(100, 100, 1400, 800) 
 
         self.simulation_running = False
         self.current_time = 0.0
@@ -27,28 +26,24 @@ class VitalSimApp(QMainWindow):
         self.animation_interval_ms = 50
 
         self.cell_data = NeuralCellData() 
-        # NEW: Initialize DrugManager
         self.drug_manager = DrugManager()
 
         self.growth_factor_level = 0.0
         self.toxin_level = 0.0
         self.metabolic_stimulator_level = 0.0
 
-        # NEW: Drug specific variables
         self.active_drug = "None"
         self.drug_dosage = 0.0
-
+        
         self.growth_slider_widget = None
         self.toxin_slider_widget = None
         self.metabolic_slider_widget = None
         self.speed_slider_widget = None
-        # NEW: Drug UI widgets
         self.drug_selection_combo = None
         self.drug_dosage_slider_widget = None
 
         self.setup_ui()
 
-        # Initialize Cell Visualization Items (existing code)
         self.membrane_item = gl.GLScatterPlotItem(pos=np.empty((0,3)), color=(0,0,0,0), size=self.cell_data.membrane_point_size)
         self.nucleus_item = gl.GLScatterPlotItem(pos=np.empty((0,3)), color=(0,0,0,0), size=self.cell_data.nucleus_point_size)
         
@@ -59,7 +54,6 @@ class VitalSimApp(QMainWindow):
             
         self.cytoplasm_particles_item = gl.GLScatterPlotItem(pos=np.empty((0,3)), color=(0,0,0,0), size=self.cell_data.particle_size)
         
-        # Add all items to the GLViewWidget
         self.gl_widget.addItem(self.membrane_item)
         self.gl_widget.addItem(self.nucleus_item)
         self.gl_widget.addItem(self.cytoplasm_particles_item)
@@ -76,15 +70,16 @@ class VitalSimApp(QMainWindow):
     def setup_ui(self):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
+        # --- GUI CHANGE: Main window background to very dark grey ---
+        central_widget.setStyleSheet("background-color: #1e1e1e;") 
 
         main_layout = QHBoxLayout(central_widget)
 
-        # --- 3D Visualization Area (Left Side) --- (existing code)
         self.gl_widget = gl.GLViewWidget()
         self.gl_widget.opts['distance'] = 25
         self.gl_widget.opts['elevation'] = 30
         self.gl_widget.opts['azimuth'] = 45
-        self.gl_widget.setBackgroundColor('#202020')
+        self.gl_widget.setBackgroundColor('#202020') 
         self.gl_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         grid = gl.GLGridItem()
@@ -97,14 +92,15 @@ class VitalSimApp(QMainWindow):
         overlay_layout.setContentsMargins(10, 10, 10, 10)
 
         self.legend_frame = QFrame(overlay_widget)
+        # --- GUI CHANGE: Updated Legend Frame Style to darker grey ---
         self.legend_frame.setStyleSheet("""
             QFrame {
-                background-color: rgba(40, 40, 40, 180);
-                border: 1px solid rgba(80, 80, 80, 200);
+                background-color: rgba(30, 30, 30, 200); /* Darker, more opaque */
+                border: 1px solid rgba(60, 60, 60, 220); /* Darker border */
                 border-radius: 8px;
             }
             QLabel {
-                color: white;
+                color: #e0e0e0; /* Lighter text for contrast */
                 font-size: 12px;
                 padding: 2px 5px;
             }
@@ -112,6 +108,7 @@ class VitalSimApp(QMainWindow):
                 font-weight: bold;
                 font-size: 14px;
                 margin-bottom: 5px;
+                color: #ffffff; /* Pure white for title */
             }
         """)
         legend_content_layout = QVBoxLayout(self.legend_frame)
@@ -164,21 +161,27 @@ class VitalSimApp(QMainWindow):
 
 
         # --- Control Panel (Right Side) ---
-        control_panel_layout = QVBoxLayout()
-        control_panel_layout.setContentsMargins(15, 15, 15, 15)
-        control_panel_layout.setSpacing(15)
+        control_panel_widget = QWidget() 
+        # --- GUI CHANGE: Control Panel Background to sharp modern grey ---
+        control_panel_widget.setStyleSheet("background-color: #282828; border-radius: 10px;") 
+        control_panel_layout = QVBoxLayout(control_panel_widget) 
+        control_panel_layout.setContentsMargins(20, 20, 20, 20) 
+        control_panel_layout.setSpacing(18) 
 
-        title_label = QLabel("VitalSim Controls")
-        title_label.setStyleSheet("font-size: 24px; font-weight: bold; color: #333; margin-bottom: 10px;")
+        # --- GUI CHANGE: Control Panel Title to pure white ---
+        title_label = QLabel("VitalSim3D Controls")
+        title_label.setStyleSheet("font-size: 26px; font-weight: bold; color: #ffffff; margin-bottom: 15px;") 
         title_label.setAlignment(Qt.AlignCenter)
         control_panel_layout.addWidget(title_label)
 
         line = QFrame()
+        # --- GUI CHANGE: Horizontal Line Style to mid-dark grey ---
         line.setFrameShape(QFrame.HLine)
         line.setFrameShadow(QFrame.Sunken)
+        line.setStyleSheet("color: #444444; background-color: #444444;") 
         control_panel_layout.addWidget(line)
 
-        # Existing sliders
+        # Existing sliders (styles updated in _create_slider)
         slider_layout, self.growth_slider_widget = self._create_slider("Growth Factor Intensity:", self.set_growth_factor_level)
         control_panel_layout.addLayout(slider_layout)
 
@@ -191,71 +194,81 @@ class VitalSimApp(QMainWindow):
         slider_layout, self.speed_slider_widget = self._create_slider("Animation Speed:", self.set_animation_speed, min_val=10, max_val=200, inverted=True)
         control_panel_layout.addLayout(slider_layout)
 
-        # NEW: Drug Control Panel Section
+        # Drug Control Panel Section
         drug_section_label = QLabel("Drug Administration")
-        drug_section_label.setStyleSheet("font-size: 18px; font-weight: bold; color: #333; margin-top: 15px;")
+        # --- GUI CHANGE: Drug Section Label Style to pure white ---
+        drug_section_label.setStyleSheet("font-size: 20px; font-weight: bold; color: #ffffff; margin-top: 20px;") 
         control_panel_layout.addWidget(drug_section_label)
 
         drug_line = QFrame()
+        # --- GUI CHANGE: Drug Section Line Style to mid-dark grey ---
         drug_line.setFrameShape(QFrame.HLine)
         drug_line.setFrameShadow(QFrame.Sunken)
+        drug_line.setStyleSheet("color: #444444; background-color: #444444;") 
         control_panel_layout.addWidget(drug_line)
 
         # Drug selection dropdown
         drug_select_layout = QHBoxLayout()
         drug_select_label = QLabel("Select Drug:")
-        drug_select_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #555;")
+        # --- GUI CHANGE: Drug Select Label Style to off-white ---
+        drug_select_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #e0e0e0;") 
         drug_select_layout.addWidget(drug_select_label)
 
         self.drug_selection_combo = QComboBox()
         self.drug_selection_combo.addItems(list(self.drug_manager.available_drugs.keys()))
         self.drug_selection_combo.currentIndexChanged.connect(self.set_active_drug)
+        # --- GUI CHANGE: ComboBox Style to modern grey palette ---
         self.drug_selection_combo.setStyleSheet("""
             QComboBox {
-                padding: 5px;
-                font-size: 14px;
-                border: 1px solid #ccc;
-                border-radius: 4px;
-                background-color: white;
+                padding: 8px; 
+                font-size: 15px; 
+                border: 1px solid #555555; /* Mid grey border */
+                border-radius: 5px;
+                background-color: #3a3a3a; /* Darker grey background */
+                color: #ffffff; /* Light text */
+                selection-background-color: #666666; /* Slightly lighter grey selection */
             }
             QComboBox::drop-down {
-                border: 0px; /* No border for the arrow part */
+                border: 0px; 
             }
             QComboBox::down-arrow {
-                image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAcAAAAFCAYAAACNbyblAAAAAXNSR0IArs4c6QAAADhJREFUCB1jYGBg+M8ABWggoAYMghMGBgYQBBgAkgEwMBgYGBgQEAAUGBgYYB/Q/wEYGBhBGPcAADX8Bv3p8K/gAAAAAElFTkSuQmCC); /* Base64 encoded small down arrow */
-                width: 10px;
-                height: 10px;
+                image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAcAAAAFCAYAAACNbyblAAAAAXNSR0IArs4c6QAAADhJREFUCB1jYGBg+M8ABWggoAYMghMGBgYQBBgAkgEwMBgYGBgQEAAUGBgYYB/Q/wEYGBhBGPcAADX8Bv3p8K/gAAAAAElFTkSuQmCC);
+                width: 12px; 
+                height: 12px;
+            }
+            QComboBox QAbstractItemView {
+                background-color: #3a3a3a; /* Dropdown background */
+                color: #ffffff; /* Dropdown text */
+                selection-background-color: #666666; /* Dropdown selection */
             }
         """)
         drug_select_layout.addWidget(self.drug_selection_combo)
         control_panel_layout.addLayout(drug_select_layout)
 
-        # Drug dosage slider
         drug_slider_layout, self.drug_dosage_slider_widget = self._create_slider("Drug Dosage:", self.set_drug_dosage)
         control_panel_layout.addLayout(drug_slider_layout)
-        # Disable dosage slider if "None" is selected initially
         self.drug_dosage_slider_widget.setEnabled(False) 
 
-        control_panel_layout.addStretch(1) # Pushes controls to the top
+        control_panel_layout.addStretch(1) 
 
-        # Existing buttons
         self.start_stop_button = QPushButton("Start Simulation")
         self.start_stop_button.clicked.connect(self.toggle_simulation)
         self.start_stop_button.setStyleSheet("""
             QPushButton {
-                padding: 12px;
-                font-size: 18px;
-                background-color: #4CAF50; /* Green */
+                padding: 14px; 
+                font-size: 19px; 
+                background-color: #27ae60; /* Green (kept for accent) */
                 color: white;
                 border: none;
-                border-radius: 8px;
+                border-radius: 9px; 
                 font-weight: bold;
+                letter-spacing: 0.5px; 
             }
             QPushButton:hover {
-                background-color: #45a049;
+                background-color: #2ecc71; 
             }
             QPushButton:pressed {
-                background-color: #367c39;
+                background-color: #229954; 
             }
         """)
         control_panel_layout.addWidget(self.start_stop_button)
@@ -264,29 +277,31 @@ class VitalSimApp(QMainWindow):
         self.reset_button.clicked.connect(self.reset_simulation)
         self.reset_button.setStyleSheet("""
             QPushButton {
-                padding: 12px;
-                font-size: 18px;
-                background-color: #f44336; /* Red */
+                padding: 14px;
+                font-size: 19px;
+                background-color: #c0392b; /* Red (kept for accent) */
                 color: white;
                 border: none;
-                border-radius: 8px;
+                border-radius: 9px;
                 font-weight: bold;
+                letter-spacing: 0.5px;
             }
             QPushButton:hover {
-                background-color: #da190b;
+                background-color: #e74c3c; 
             }
             QPushButton:pressed {
-                background-color: #c00c00;
+                background-color: #a93226; 
             }
         """)
         control_panel_layout.addWidget(self.reset_button)
 
-        main_layout.addLayout(control_panel_layout, 1)
+        main_layout.addWidget(control_panel_widget, 1)
 
     def _create_slider(self, label_text, callback_func, min_val=0, max_val=100, inverted=False):
         layout = QVBoxLayout()
         label = QLabel(label_text)
-        label.setStyleSheet("font-size: 14px; font-weight: bold; color: #555;")
+        # --- GUI CHANGE: Slider Label Style to off-white ---
+        label.setStyleSheet("font-size: 15px; font-weight: bold; color: #e0e0e0;") 
         layout.addWidget(label)
 
         slider = QSlider(Qt.Horizontal)
@@ -294,20 +309,25 @@ class VitalSimApp(QMainWindow):
         slider.setValue(int(self._get_initial_slider_value(label_text.split(':')[0], min_val, max_val, inverted)))
         slider.setTickPosition(QSlider.TicksBelow)
         slider.setTickInterval(10)
+        # --- GUI CHANGE: Slider Style to modern grey palette ---
         slider.setStyleSheet("""
             QSlider::groove:horizontal {
-                border: 1px solid #bbb;
-                background: #ddd;
-                height: 10px;
-                border-radius: 4px;
+                border: 1px solid #444444; /* Mid-dark grey border */
+                background: #3a3a3a; /* Darker grey groove */
+                height: 12px; 
+                border-radius: 6px; 
             }
             QSlider::handle:horizontal {
-                background: #fff;
-                border: 1px solid #777;
-                width: 18px;
-                margin-top: -4px;
-                margin-bottom: -4px;
-                border-radius: 9px;
+                background: #ffffff; /* Light grey handle */
+                border: 1px solid #888888; /* Mid-grey handle border */
+                width: 20px; 
+                margin-top: -5px; 
+                margin-bottom: -5px;
+                border-radius: 10px; 
+            }
+            QSlider::sub-page:horizontal {
+                background: #666666; /* A good contrasting grey for the filled part */
+                border-radius: 6px;
             }
         """)
         if not inverted:
@@ -318,7 +338,6 @@ class VitalSimApp(QMainWindow):
         return layout, slider
 
     def _get_initial_slider_value(self, slider_name, min_val, max_val, inverted):
-        # NEW: Handle drug dosage initial value
         if "Drug Dosage" in slider_name:
             return self.drug_dosage * 100
         elif "Growth Factor" in slider_name:
@@ -331,17 +350,15 @@ class VitalSimApp(QMainWindow):
             return self.animation_interval_ms
         return 0
 
-    # NEW: Callback for drug selection combo box
     def set_active_drug(self, index):
         drug_name = self.drug_selection_combo.currentText()
         self.drug_manager.set_active_drug(drug_name)
-        self.active_drug = drug_name # Update local tracker
-        self.drug_dosage_slider_widget.setValue(0) # Reset dosage slider when drug changes
-        self.drug_dosage_slider_widget.setEnabled(drug_name != "None") # Enable only if a drug is selected
+        self.active_drug = drug_name
+        self.drug_dosage_slider_widget.setValue(0) 
+        self.drug_dosage_slider_widget.setEnabled(drug_name != "None") 
         if not self.simulation_running:
             self.update_visualization()
 
-    # NEW: Callback for drug dosage slider
     def set_drug_dosage(self, level):
         self.drug_dosage = level
         self.drug_manager.set_drug_dosage(level)
@@ -372,83 +389,125 @@ class VitalSimApp(QMainWindow):
             self.timer.stop()
             self.simulation_running = False
             self.start_stop_button.setText("Start Simulation")
-            self.start_stop_button.setStyleSheet("padding: 12px; font-size: 18px; background-color: #4CAF50; color: white; border: none; border-radius: 8px; font-weight: bold;")
+            self.start_stop_button.setStyleSheet("""
+                QPushButton {
+                    padding: 14px;
+                    font-size: 19px;
+                    background-color: #27ae60; 
+                    color: white;
+                    border: none;
+                    border-radius: 9px;
+                    font-weight: bold;
+                    letter-spacing: 0.5px;
+                }
+                QPushButton:hover {
+                    background-color: #2ecc71;
+                }
+                QPushButton:pressed {
+                    background-color: #229954;
+                }
+            """)
         else:
             self.timer.start()
             self.simulation_running = True
             self.start_stop_button.setText("Stop Simulation")
-            self.start_stop_button.setStyleSheet("padding: 12px; font-size: 18px; background-color: #FF9800; color: white; border: none; border-radius: 8px; font-weight: bold;")
+            self.start_stop_button.setStyleSheet("""
+                QPushButton {
+                    padding: 14px;
+                    font-size: 19px;
+                    background-color: #e67e22; /* Orange-red for Stop */
+                    color: white;
+                    border: none;
+                    border-radius: 9px;
+                    font-weight: bold;
+                    letter-spacing: 0.5px;
+                }
+                QPushButton:hover {
+                    background-color: #f39c12;
+                }
+                QPushButton:pressed {
+                    background-color: #d35400;
+                }
+            """)
 
     def reset_simulation(self):
         if self.simulation_running:
             self.timer.stop()
             self.simulation_running = False
             self.start_stop_button.setText("Start Simulation")
-            self.start_stop_button.setStyleSheet("padding: 12px; font-size: 18px; background-color: #4CAF50; color: white; border: none; border-radius: 8px; font-weight: bold;")
+            self.start_stop_button.setStyleSheet("""
+                QPushButton {
+                    padding: 14px;
+                    font-size: 19px;
+                    background-color: #27ae60; 
+                    color: white;
+                    border: none;
+                    border-radius: 9px;
+                    font-weight: bold;
+                    letter-spacing: 0.5px;
+                }
+                QPushButton:hover {
+                    background-color: #2ecc71;
+                }
+                QPushButton:pressed {
+                    background-color: #229954;
+                }
+            """)
 
         self.growth_factor_level = 0.0
         self.toxin_level = 0.0
         self.metabolic_stimulator_level = 0.0
-        # NEW: Reset drug levels
+        
         self.active_drug = "None"
         self.drug_dosage = 0.0
-        self.drug_manager.set_active_drug("None") # Tell manager to reset
+        self.drug_manager.set_active_drug("None") 
         self.drug_manager.set_drug_dosage(0.0)
 
-        # Reset UI sliders to 0
         self.growth_slider_widget.setValue(0)
         self.toxin_slider_widget.setValue(0)
         self.metabolic_slider_widget.setValue(0)
-        self.speed_slider_widget.setValue(self.animation_interval_ms) # Speed slider should reset to its default, not necessarily 0
-        # NEW: Reset drug UI
-        self.drug_selection_combo.setCurrentText("None") # Set combo box to "None"
+        self.speed_slider_widget.setValue(self.animation_interval_ms) 
+        
+        self.drug_selection_combo.setCurrentText("None") 
         self.drug_dosage_slider_widget.setValue(0)
-        self.drug_dosage_slider_widget.setEnabled(False) # Disable until drug is selected again
+        self.drug_dosage_slider_widget.setEnabled(False) 
 
-
-        self.cell_data.generate_initial_state() # This resets cell_data to its base (homeostasis) state
+        self.cell_data.reset_dynamic_properties()
         self.update_visualization()
 
     def update_simulation_step(self):
         self.current_time += self.time_step
 
-        # NEW: Pass the drug_manager to the apply_compound_effects function
         self.cell_data = apply_compound_effects(
             self.cell_data,
             self.growth_factor_level,
             self.toxin_level,
             self.metabolic_stimulator_level,
             self.time_step,
-            self.drug_manager # Pass drug manager instance
+            self.drug_manager 
         )
         self.update_visualization()
 
     def update_visualization(self):
-        # Update Membrane
         self.membrane_item.setData(pos=self.cell_data.membrane_points,
                                    color=self.cell_data.membrane_color,
                                    size=self.cell_data.membrane_point_size)
 
-        # Update Nucleus
         self.nucleus_item.setData(pos=self.cell_data.nucleus_points,
                                    color=self.cell_data.nucleus_color,
                                    size=self.cell_data.nucleus_point_size)
 
-        # Update Mitochondria
-        # Note: self.cell_data.mitochondria_points is already a list of arrays from simulation_logic
         for i, item in enumerate(self.mitochondria_items):
             if i < self.cell_data.num_active_mitochondria:
-                # Ensure the list has enough entries, as num_active_mitochondria might exceed it
                 if i < len(self.cell_data.mitochondria_points) and self.cell_data.mitochondria_points[i].size > 0:
                      item.setData(pos=self.cell_data.mitochondria_points[i],
                                   color=self.cell_data.mitochondria_color,
                                   size=self.cell_data.mitochondria_point_size)
-                else: # Fallback if data is missing for an active mito
+                else: 
                     item.setData(pos=np.empty((0,3))) 
             else:
-                item.setData(pos=np.empty((0,3))) # Hide inactive mitochondria
+                item.setData(pos=np.empty((0,3))) 
 
-        # Update Cytoplasm Particles
         self.cytoplasm_particles_item.setData(pos=self.cell_data.cytoplasm_particles,
                                                color=self.cell_data.particle_color,
                                                size=self.cell_data.particle_size)

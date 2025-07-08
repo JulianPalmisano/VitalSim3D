@@ -1,5 +1,6 @@
-from drugs import Alcohol, Caffeine
-from cell_model import NeuralCellData # Ensure this import matches your file structure
+# drug_manager.py
+from drugs import Alcohol, Caffeine, Nicotine, Amphetamine # NEW: Import new drugs
+from cell_model import NeuralCellData 
 
 class DrugManager:
     """
@@ -9,7 +10,9 @@ class DrugManager:
         self.available_drugs = {
             "None": None, # Option for no drug selected
             "Alcohol": Alcohol(),
-            "Caffeine": Caffeine()
+            "Caffeine": Caffeine(),
+            "Nicotine": Nicotine(), # NEW: Add Nicotine
+            "Amphetamine": Amphetamine() # NEW: Add Amphetamine
         }
         self.active_drug_name = "None"
         self.drug_dosage = 0.0
@@ -21,9 +24,7 @@ class DrugManager:
         """
         if drug_name in self.available_drugs:
             self.active_drug_name = drug_name
-            # Optionally reset dosage when switching drugs, or keep it.
-            # Let's reset it to 0 for a clear observation upon switching.
-            self.drug_dosage = 0.0 
+            self.drug_dosage = 0.0 # Reset dosage when switching drugs for a clean start
         else:
             print(f"Warning: Drug '{drug_name}' not recognized. Setting to 'None'.")
             self.active_drug_name = "None"
@@ -40,7 +41,7 @@ class DrugManager:
         """
         self.drug_dosage = max(0.0, min(1.0, dosage)) # Ensure dosage is between 0 and 1
 
-    def apply_drug_effects(self, cell_data: NeuralCellData):
+    def apply_drug_effects(self, cell_data: NeuralCellData, time_step: float): # NEW: Pass time_step
         """
         Applies the effect of the active drug to the cell_data.
         This method is called *before* the general compound effects.
@@ -48,7 +49,4 @@ class DrugManager:
         if self.active_drug_name != "None":
             drug_instance = self.available_drugs[self.active_drug_name]
             if drug_instance: # Check if it's not None
-                drug_instance.apply_effect(cell_data, self.drug_dosage)
-        # Note: If self.active_drug_name is "None" or drug_dosage is 0,
-        # no drug effect will be applied, relying on the simulation_logic
-        # to reset/maintain homeostasis.
+                drug_instance.apply_effect(cell_data, self.drug_dosage, time_step) # Pass time_step
