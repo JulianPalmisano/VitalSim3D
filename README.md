@@ -1,6 +1,6 @@
-# VitalSim3D
+# 🧬 VitalSim3D 
 
-VitalSim3D is an open source interactive cell simulator.
+**VitalSim3D** is an open source interactive 🧠 cell simulator.
 
 Cell Model and Components:
 * Neuron Soma Membrane
@@ -10,7 +10,7 @@ Cell Model and Components:
 
 The current cell model is a basic neural cell like structure.
 
-Features & Functionalities:
+ 🚀 Features & Functionalities:
 * Visualize cell changes throughout time
 * Influence various factors such as:
      Growth Factor Intensity
@@ -23,12 +23,12 @@ Features & Functionalities:
      Nicotine
      Amphetamine
 
-HOW TO USE:
+ 🕹️ HOW TO USE:
 User will see a control panel on the right side of the screen. This control panel houses the various factors and drugs as mentioned before.
 Click start simulation to begin live simulating, drag the sliders of the various factors to influence the cell.
 Select a drug from the drop down menu and increase dosage to observe effects.
 
-Possible use cases/additions one could make to this:
+ 💡 Possible use cases/additions one could make to this:
 * Adding more drugs
 * Adding specific measurements
 * Increase organelle relationships
@@ -36,10 +36,10 @@ Possible use cases/additions one could make to this:
 * Customize visualization and coloring as one would like
 * Add new cells, the ability to switch between various types of cells
 
-Languages Used:
-* Python
+🧠Languages Used:
+* Python - development supported with Gemini AI tools
 
-Libraries Used:
+ 🧰 Libraries Used:
 * sys
 * numpy
 * PyQt5.QtWidgets
