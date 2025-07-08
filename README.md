@@ -23,10 +23,14 @@ The current cell model is a basic neural cell like structure.
      Nicotine
      Amphetamine
 
+---
+
  🕹️ HOW TO USE:
 User will see a control panel on the right side of the screen. This control panel houses the various factors and drugs as mentioned before.
 Click start simulation to begin live simulating, drag the sliders of the various factors to influence the cell.
 Select a drug from the drop down menu and increase dosage to observe effects.
+
+---
 
  💡 Possible use cases/additions one could make to this:
 * Adding more drugs
