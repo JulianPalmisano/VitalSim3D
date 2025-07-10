@@ -224,6 +224,8 @@ class NeuralCellData:
         self.mitochondria_color = self.initial_mitochondria_color
         self.particle_color = self.initial_particle_color
 
+import numpy as np
+
 class AstrocyteCellData:
     """
     Encapsulates all data related to the astrocyte cell's 3D structure and visual properties.
@@ -269,7 +271,6 @@ class AstrocyteCellData:
         self.process_particle_size = 2.5
         self.process_label = "Astrocyte Processes"
 
-
         # Dynamic properties (initially set, modified by simulation_logic)
         self.current_scale = 1.0
         self.process_density_factor = 1.0 # New dynamic property for astrocytes
@@ -287,16 +288,30 @@ class AstrocyteCellData:
         self.recovery_rate_mitochondria = 0.03
 
         # Store initial colors for recovery
-        self.initial_membrane_color = (0.7, 0.5, 0.9, 0.2)
-        self.initial_nucleus_color = (0.5, 0.2, 0.7, 0.8)
-        self.initial_mitochondria_color = (0.9, 0.4, 0.1, 0.8)
-        self.initial_particle_color = (0.6, 0.6, 0.6, 0.5)
-        self.initial_process_color = (0.7, 0.5, 0.9, 0.3)
+        self.initial_membrane_color = np.array((0.7, 0.5, 0.9, 0.2)) # Converted to numpy array for consistency
+        self.initial_nucleus_color = np.array((0.5, 0.2, 0.7, 0.8))
+        self.initial_mitochondria_color = np.array((0.9, 0.4, 0.1, 0.8))
+        self.initial_particle_color = np.array((0.6, 0.6, 0.6, 0.5))
+        self.initial_process_color = np.array((0.7, 0.5, 0.9, 0.3))
 
         # --- Astrocyte Specific Properties (for future simulation logic) ---
         self.gfap_level = 0.0 # Glial Fibrillary Acidic Protein, a marker of reactivity
         self.glutamate_uptake_efficiency = 1.0 # Astrocytes regulate glutamate
         self.calcium_activity_level = 0.0 # Astrocytes also have Ca2+ signaling
+
+        # NEW: Rates for how growth/toxin affect process density
+        self.process_growth_rate = 0.05     # How much growth factor increases density per time step
+        self.process_decay_rate = 0.08      # How much toxin decreases density per time step
+        
+        # Ensure particle_speed_factor is defined for BaseCellData compatibility in simulation_logic
+        # Even if Astrocyte uses 'cytoplasm_activity_factor' primarily, 'simulation_logic' expects 'particle_speed_factor'
+        self.particle_speed_factor = self.cytoplasm_activity_factor # Alias or map
+        self.homeo_particle_speed = self.homeo_cytoplasm_activity
+        self.recovery_rate_particle_speed = self.recovery_rate_cytoplasm_activity
+
+        # Add branching_factor to __init__ as it's used by generate_processes
+        self.branching_factor = 0.05 
+
 
         # Generate the initial state
         self.generate_initial_state()
@@ -387,45 +402,8 @@ class AstrocyteCellData:
 
         # --- Astrocyte Processes (radiating particles) ---
         # The key defining feature of an astrocyte visually
-        num_target_process_particles = self.num_process_particles
-        self.base_process_particles = np.empty((num_target_process_particles, 3))
-
-        # Define an outer boundary for processes
-        process_outer_radius = 10.0 # Astrocytes can have very large domains, covering synapses and blood vessels
-        process_inner_radius = soma_radius * 1.2 # Processes start slightly outside the main soma to avoid overlap
-
-        count = 0
-        while count < num_target_process_particles:
-            batch_size = min(num_target_process_particles - count, 100)
-            # Generate points within a spherical shell
-            candidate_particles = np.random.uniform(
-                [-process_outer_radius, -process_outer_radius, -process_outer_radius],
-                [process_outer_radius, process_outer_radius, process_outer_radius],
-                (batch_size, 3)
-            )
-
-            for p in candidate_particles:
-                dist = np.linalg.norm(p)
-                # Particles must be outside the main soma's immediate vicinity, but within the process domain
-                if dist >= process_inner_radius and dist <= process_outer_radius:
-                    # To create a more "spiky" or "arm-like" appearance,
-                    # we can bias points towards certain radial directions or
-                    # generate them along predefined "rays".
-                    # For simplicity and robust random generation: generate points
-                    # in a wider sphere and scale them radially to emphasize outer reach
-                    
-                    # A slight radial bias: points are pushed outwards from center, but with noise
-                    radial_factor = np.random.uniform(process_inner_radius, process_outer_radius) / dist
-                    p_biased = p * radial_factor + np.random.normal(0, 0.5, 3) # Add some noise
-                    
-                    # Ensure it's still within the intended bounds after bias
-                    if np.linalg.norm(p_biased) <= process_outer_radius:
-                        self.base_process_particles[count] = p_biased
-                        count += 1
-                        if count >= num_target_process_particles:
-                            break
-        self.process_particles = np.copy(self.base_process_particles)
-
+        # Initial generation of processes during setup
+        self.generate_processes(self.current_scale, self.process_density_factor)
 
         # Reset dynamic properties to default homeostasis values
         self.current_scale = self.homeo_scale
@@ -438,11 +416,78 @@ class AstrocyteCellData:
         self.calcium_activity_level = 0.0
 
         # Ensure colors are reset
-        self.membrane_color = self.initial_membrane_color
-        self.nucleus_color = self.initial_nucleus_color
-        self.mitochondria_color = self.initial_mitochondria_color
-        self.particle_color = self.initial_particle_color
-        self.process_color = self.initial_process_color
+        self.membrane_color = np.array(self.initial_membrane_color)
+        self.nucleus_color = np.array(self.initial_nucleus_color)
+        self.mitochondria_color = np.array(self.initial_mitochondria_color)
+        self.particle_color = np.array(self.initial_particle_color)
+        self.process_color = np.array(self.initial_process_color)
+
+    # THIS METHOD WAS MOVED OUT OF generate_initial_state AND INTO THE CLASS LEVEL
+    def generate_processes(self, current_scale, density_factor):
+        """
+        Generates astrocyte processes based on density factor and scale.
+        This method is called to update the visual processes.
+        """
+        self.process_points = []
+        num_main_processes = int(8 * density_factor) # Example: fewer processes at lower density
+        
+        # Ensure we have a base_membrane_points to start processes from
+        if self.base_membrane_points is None or len(self.base_membrane_points) == 0:
+            # Fallback if base_membrane_points aren't loaded yet (e.g., if generate_initial_state
+            # hasn't fully run or there's an issue with mesh loading).
+            # Generate temporary starting points near the origin if no soma membrane exists.
+            print("Warning: base_membrane_points not available for process generation. Using default sphere points.")
+            temp_soma_radius = 2.5 * current_scale
+            start_points_candidates = (np.random.rand(100, 3) - 0.5) * 2 * temp_soma_radius
+            start_points_candidates = start_points_candidates[np.linalg.norm(start_points_candidates, axis=1) < temp_soma_radius]
+            if len(start_points_candidates) == 0:
+                start_points_candidates = np.array([[0.0, 0.0, 0.0]]) # At least one point
+
+            # Pick randomly from these candidates if num_main_processes is greater than candidates
+            start_indices = np.random.choice(len(start_points_candidates), min(num_main_processes, len(start_points_candidates)), replace=False)
+            main_process_starts = start_points_candidates[start_indices]
+        else:
+            # Pick starting points from the scaled base membrane points
+            num_soma_points = len(self.base_membrane_points)
+            if num_soma_points == 0: # Handle empty base points
+                start_indices = np.random.choice(1, min(num_main_processes, 1), replace=False)
+                main_process_starts = np.array([[0.0, 0.0, 0.0]]) # Start at origin as a fallback
+            else:
+                start_indices = np.random.choice(num_soma_points, min(num_main_processes, num_soma_points), replace=False)
+                main_process_starts = self.base_membrane_points[start_indices] * current_scale
+
+        for start_point in main_process_starts:
+            # Simple branching simulation for each main process
+            current_branch_points = [start_point]
+            
+            # Number of segments in a branch depends on density_factor
+            num_segments = int(5 * density_factor) 
+            if num_segments < 1: num_segments = 1 # Ensure at least one segment if density is very low
+
+            for _ in range(num_segments):
+                last_point = current_branch_points[-1]
+                
+                # Direction and jiggle for the next segment
+                # branching_factor should be defined in __init__
+                if not hasattr(self, 'branching_factor'):
+                    # This check is mostly for robustness during development.
+                    # It's better to ensure branching_factor is always initialized in __init__.
+                    self.branching_factor = 0.05 # Default if not set
+
+                direction = (np.random.rand(3) - 0.5) * self.branching_factor * current_scale
+                new_point = last_point + direction
+                current_branch_points.append(new_point)
+            
+            self.process_points.extend(current_branch_points)
+        
+        # Update self.process_particles from the generated process_points
+        self.process_particles = np.array(self.process_points) if self.process_points else np.empty((0,3))
+
+        # Important: If your rendering relies on a fixed number of process particles
+        # (e.g., self.num_process_particles), you'll need a strategy here.
+        # This current implementation regenerates the precise points.
+        # If the renderer expects a certain size, you might need to pad/truncate or adapt the renderer.
+        # For a scatter plot, dynamic size is usually fine.
 
 
     def reset_dynamic_properties(self):
@@ -464,15 +509,17 @@ class AstrocyteCellData:
         self.membrane_points = self.base_membrane_points * self.current_scale
         self.nucleus_points = self.base_nucleus_points * self.current_scale
         
-        self.mitochondria_points = [np.copy(b_m) for b_m in self.base_mitochondria_points_list]
+        # Ensure proper copying if base_mitochondria_points_list contains numpy arrays
+        self.mitochondria_points = [np.copy(b_m) * self.current_scale for b_m in self.base_mitochondria_points_list]
         self.cytoplasm_particles = np.copy(self.base_cytoplasm_particles)
-        
-        # Apply process_density_factor to processes
-        self.process_particles = np.copy(self.base_process_particles) * self.process_density_factor * self.current_scale # Also affected by overall scale
 
-        # Reset colors to initial values
-        self.membrane_color = self.initial_membrane_color
-        self.nucleus_color = self.initial_nucleus_color
-        self.mitochondria_color = self.initial_mitochondria_color
-        self.particle_color = self.initial_particle_color
-        self.process_color = self.initial_process_color
+        # Re-generate processes when resetting dynamic properties
+        # This will ensure the visual processes reflect the homeostatic density
+        self.generate_processes(self.current_scale, self.process_density_factor)
+
+        # Reset colors to initial values (ensure they are numpy arrays if that's the expected type)
+        self.membrane_color = np.array(self.initial_membrane_color)
+        self.nucleus_color = np.array(self.initial_nucleus_color)
+        self.mitochondria_color = np.array(self.initial_mitochondria_color)
+        self.particle_color = np.array(self.initial_particle_color)
+        self.process_color = np.array(self.initial_process_color)
